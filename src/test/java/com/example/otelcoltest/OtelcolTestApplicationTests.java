@@ -58,12 +58,12 @@ class OtelcolTestApplicationTests {
 
 	@Container
 	private static GenericContainer<?> collector = new GenericContainer<>(DockerImageName.parse(COLLECTOR_IMAGE))
-			.withEnv("OTLP_EXPORTER_ENDPOINT", "http://host.testcontainers.internal:" + port)
-			.withClasspathResourceMapping("otel-config.yaml", "/otel-config.yaml", BindMode.READ_ONLY)
-			.withCommand("--config", "/otel-config.yaml")
-			.withLogConsumer(new Slf4jLogConsumer(LoggerFactory.getLogger("otel-collector")))
-			.withExposedPorts(COLLECTOR_OTLP_HTTP_PORT, COLLECTOR_HEALTH_CHECK_PORT)
-			.waitingFor(Wait.forHttp("/").forPort(COLLECTOR_HEALTH_CHECK_PORT));
+		.withEnv("OTLP_EXPORTER_ENDPOINT", "http://host.testcontainers.internal:" + port)
+		.withClasspathResourceMapping("otel-config.yaml", "/otel-config.yaml", BindMode.READ_ONLY)
+		.withCommand("--config", "/otel-config.yaml")
+		.withLogConsumer(new Slf4jLogConsumer(LoggerFactory.getLogger("otel-collector")))
+		.withExposedPorts(COLLECTOR_OTLP_HTTP_PORT, COLLECTOR_HEALTH_CHECK_PORT)
+		.waitingFor(Wait.forHttp("/").forPort(COLLECTOR_HEALTH_CHECK_PORT));
 
 	@Autowired
 	OtlpV1Controller otlpV1Controller;
@@ -79,10 +79,10 @@ class OtelcolTestApplicationTests {
 	void beforeEach(@Autowired RestClient.Builder restClientBuilder,
 			@Autowired LogbookClientHttpRequestInterceptor logbookClientHttpRequestInterceptor) {
 		this.restClient = restClientBuilder
-				.baseUrl("http://localhost:" + collector.getMappedPort(COLLECTOR_OTLP_HTTP_PORT))
-				.defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_PROTOBUF_VALUE)
-				.requestInterceptor(logbookClientHttpRequestInterceptor)
-				.build();
+			.baseUrl("http://localhost:" + collector.getMappedPort(COLLECTOR_OTLP_HTTP_PORT))
+			.defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_PROTOBUF_VALUE)
+			.requestInterceptor(logbookClientHttpRequestInterceptor)
+			.build();
 		this.otlpV1Controller.reset();
 	}
 
@@ -91,30 +91,29 @@ class OtelcolTestApplicationTests {
 		// https://logz.io/blog/logstash-grok/
 		String message = "2016-07-11T23:56:42.000+00:00 INFO [MySecretApp.com.Transaction.Manager]:Starting transaction for session -464410bf-37bf-475a-afc0-498e0199f008";
 		ResponseEntity<Void> response = this.restClient.post()
-				.uri("/v1/logs")
-				.body(just(message))
-				.retrieve()
-				.toBodilessEntity();
+			.uri("/v1/logs")
+			.body(just(message))
+			.retrieve()
+			.toBodilessEntity();
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-		Awaitility.waitAtMost(Duration.ofSeconds(1)).untilAsserted(() -> {
-			assertThat(this.otlpV1Controller.logsData).hasSize(1);
-			assertThat(this.otlpV1Controller.logsData.get(0)).isEqualTo(LogsData.newBuilder()
-					.addResourceLogs(ResourceLogs.newBuilder()
-							.setResource(Resource.newBuilder())
-							.addScopeLogs(ScopeLogs.newBuilder()
-									.setScope(InstrumentationScope.newBuilder())
-									.addLogRecords(LogRecord.newBuilder()
-											.setSeverityText("INFO")
-											.setTimeUnixNano(toNano("2016-07-11T23:56:42.000+00:00"))
-											.setObservedTimeUnixNano(toNano("2016-07-11T23:56:42.000+00:00"))
-											.addAttributes(KeyValue.newBuilder()
-													.setKey("class")
-													.setValue(AnyValue.newBuilder().setStringValue("MySecretApp.com.Transaction.Manager")))
-											.setBody(AnyValue.newBuilder()
-													.setStringValue(
-															"Starting transaction for session -464410bf-37bf-475a-afc0-498e0199f008")))))
-					.build());
-		});
+		Awaitility.waitAtMost(Duration.ofSeconds(1))
+			.untilAsserted(() -> assertThat(this.otlpV1Controller.logsData).hasSize(1));
+		assertThat(this.otlpV1Controller.logsData.get(0)).isEqualTo(LogsData.newBuilder()
+			.addResourceLogs(ResourceLogs.newBuilder()
+				.setResource(Resource.newBuilder())
+				.addScopeLogs(ScopeLogs.newBuilder()
+					.setScope(InstrumentationScope.newBuilder())
+					.addLogRecords(LogRecord.newBuilder()
+						.setSeverityText("INFO")
+						.setTimeUnixNano(toNano("2016-07-11T23:56:42.000+00:00"))
+						.setObservedTimeUnixNano(toNano("2016-07-11T23:56:42.000+00:00"))
+						.addAttributes(KeyValue.newBuilder()
+							.setKey("class")
+							.setValue(AnyValue.newBuilder().setStringValue("MySecretApp.com.Transaction.Manager")))
+						.setBody(AnyValue.newBuilder()
+							.setStringValue(
+									"Starting transaction for session -464410bf-37bf-475a-afc0-498e0199f008")))))
+			.build());
 	}
 
 	long toNano(String timestamp) {
@@ -124,10 +123,10 @@ class OtelcolTestApplicationTests {
 
 	static LogsData just(String message) {
 		return LogsData.newBuilder()
-				.addResourceLogs(ResourceLogs.newBuilder()
-						.addScopeLogs(ScopeLogs.newBuilder()
-								.addLogRecords(LogRecord.newBuilder().setBody(AnyValue.newBuilder().setStringValue(message)))))
-				.build();
+			.addResourceLogs(ResourceLogs.newBuilder()
+				.addScopeLogs(ScopeLogs.newBuilder()
+					.addLogRecords(LogRecord.newBuilder().setBody(AnyValue.newBuilder().setStringValue(message)))))
+			.build();
 	}
 
 	static int getFreePort() {
