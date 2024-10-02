@@ -1,0 +1,39 @@
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+exporters:
+  debug:
+    verbosity: detailed
+  otlphttp:
+    endpoint: ${OTLP_EXPORTER_ENDPOINT}
+    compression: none
+    tls:
+      insecure: true
+processors:
+  transform:
+    error_mode: ignore
+    log_statements:
+    #! https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/transformprocessor#contexts
+    - context: log
+      statements:
+      #! https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/pkg/ottl/ottlfuncs#extractgrokpatterns
+      #! https://logz.io/blog/logstash-grok/
+      - merge_maps(cache, ExtractGrokPatterns(body, "%{TIMESTAMP_ISO8601:timestamp} %{LOGLEVEL:loglevel} \\[%{DATA:class}\\]:%{GREEDYDATA:message}", true), "upsert") where IsString(body)
+      - set(severity_text, cache["loglevel"]) where IsString(cache["loglevel"])
+      - set(attributes["class"], cache["class"]) where IsString(cache["class"])
+      - set(body, cache["message"]) where IsString(cache["message"])
+      #! https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/pkg/ottl/ottlfuncs#time
+      - set(time, Time(cache["timestamp"], "%Y-%m-%dT%H:%M:%S.%s%j")) where IsMatch(cache["timestamp"], "^\\d+\\-.+\\d$")
+      - set(observed_time, time) where IsMatch(cache["timestamp"], "^\\d+\\-.+\\d$")
+service:
+  extensions: [ health_check ]
+  pipelines:
+    logs:
+      receivers: [ otlp ]
+      processors: [ transform ]
+      exporters: [ debug, otlphttp ]
