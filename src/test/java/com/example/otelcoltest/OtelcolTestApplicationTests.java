@@ -88,10 +88,10 @@ class OtelcolTestApplicationTests {
 
 	@Test
 	void contextLoads() {
+		// https://logz.io/blog/logstash-grok/
 		String message = "2016-07-11T23:56:42.000+00:00 INFO [MySecretApp.com.Transaction.Manager]:Starting transaction for session -464410bf-37bf-475a-afc0-498e0199f008";
 		ResponseEntity<Void> response = this.restClient.post()
 				.uri("/v1/logs")
-				// https://logz.io/blog/logstash-grok/
 				.body(just(message))
 				.retrieve()
 				.toBodilessEntity();
