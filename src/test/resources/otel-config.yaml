@@ -15,25 +15,67 @@ exporters:
     tls:
       insecure: true
 processors:
-  transform:
+  transform/syslog:
     error_mode: ignore
     log_statements:
-    #! https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/transformprocessor#contexts
+    #! https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/transformprocessor#basic-config
     - context: log
       statements:
-      #! https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/pkg/ottl/ottlfuncs#extractgrokpatterns
-      #! https://logz.io/blog/logstash-grok/
-      - merge_maps(cache, ExtractGrokPatterns(body, "%{TIMESTAMP_ISO8601:timestamp} %{LOGLEVEL:loglevel} \\[%{DATA:class}\\]:%{GREEDYDATA:message}", true), "upsert") where IsString(body)
-      - set(severity_text, cache["loglevel"]) where IsString(cache["loglevel"])
-      - set(attributes["class"], cache["class"]) where IsString(cache["class"])
-      - set(body, cache["message"]) where IsString(cache["message"])
-      #! https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/pkg/ottl/ottlfuncs#time
-      - set(time, Time(cache["timestamp"], "%Y-%m-%dT%H:%M:%S.%s%j")) where IsMatch(cache["timestamp"], "^\\d+\\-.+\\d$")
-      - set(observed_time, time) where IsMatch(cache["timestamp"], "^\\d+\\-.+\\d$")
+      - merge_maps(attributes, ExtractGrokPatterns(body, "(?:%{INT:syslog6587.msglen} )?<%{POSINT:syslog.pri}>(%{SPACE})?(?:%{NONNEGINT:syslog5424.ver} )?(?:%{SYSLOGTIMESTAMP:syslog.timestamp}|%{TIMESTAMP_ISO8601:syslog.timestamp}) %{DATA:syslog.hostname} %{DATA:syslog.program}(?:\\[%{POSINT:syslog.pid}\\])?(:)? %{GREEDYDATA:syslog.message}", true), "upsert") where IsString(body)
+      - 'merge_maps(attributes, ExtractGrokPatterns(attributes["syslog.message"], "(?:%{DATA:syslog.procid}|\\-) (?:%{DATA:syslog.msgid}|\\-)(?: %{SYSLOG5424SD:syslog.sd}| \\-)? %{GREEDYDATA:syslog.message}", true), "upsert") where attributes["syslog5424.ver"] == "1"'
+      - 'merge_maps(attributes, ExtractGrokPatterns(attributes["syslog.sd"], "\\[%{DATA:syslog.sd_id} (?<syslog_sd_params_raw>[^\\]]+)\\]", true), "upsert") where IsString(attributes["syslog.sd"])'
+      - merge_maps(resource.attributes, ParseKeyValue(attributes["syslog_sd_params_raw"]), "upsert") where IsString(attributes["syslog_sd_params_raw"])
+      - set(attributes["syslog.facility"], Int(attributes["syslog.pri"]) / 8) where IsString(attributes["syslog.pri"])
+      - set(attributes["syslog.severity"], Int(attributes["syslog.pri"]) - (attributes["syslog.facility"] * 8)) where IsString(attributes["syslog.pri"])
+      - set(severity_text, "FATAL") where attributes["syslog.severity"] == 0
+      - set(severity_number, 21) where attributes["syslog.severity"] == 0
+      - set(severity_text, "FATAL") where attributes["syslog.severity"] == 1
+      - set(severity_number, 21) where attributes["syslog.severity"] == 1
+      - set(severity_text, "FATAL") where attributes["syslog.severity"] == 2
+      - set(severity_number, 21) where attributes["syslog.severity"] == 2
+      - set(severity_text, "ERROR") where attributes["syslog.severity"] == 3
+      - set(severity_number, 17) where attributes["syslog.severity"] == 3
+      - set(severity_text, "WARN") where attributes["syslog.severity"] == 4
+      - set(severity_number, 13) where attributes["syslog.severity"] == 4
+      - set(severity_text, "INFO") where attributes["syslog.severity"] == 5
+      - set(severity_number, 9) where attributes["syslog.severity"] == 5
+      - set(severity_text, "INFO") where attributes["syslog.severity"] == 6
+      - set(severity_number, 9) where attributes["syslog.severity"] == 6
+      - set(severity_text, "DEBUG") where attributes["syslog.severity"] == 7
+      - set(severity_number, 5) where attributes["syslog.severity"] == 7
+      - replace_pattern(attributes["syslog.timestamp"], "(.+)([\\+\\-])(\\d+):(\\d+)$", "$$1$$2$$3$$4")
+      - set(time, Time(attributes["syslog.timestamp"], "%Y-%m-%dT%H:%M:%S.%sZ")) where IsMatch(attributes["syslog.timestamp"], "^\\d+\\-.+Z$")
+      - set(time, Time(attributes["syslog.timestamp"], "%Y-%m-%dT%H:%M:%S.%s%z")) where IsMatch(attributes["syslog.timestamp"], "^\\d+\\-.+\\d$")
+      - set(time, Time(attributes["syslog.timestamp"], "%b %d %H:%M:%S")) where IsMatch(attributes["syslog.timestamp"], "^[a-zA-Z]+ .+\\d$")
+      - set(body, attributes["syslog.message"])
+      - set(resource.attributes["container.image.name"], resource.attributes["container_image"]) where IsString(resource.attributes["container_image"])
+      - set(resource.attributes["service.name"], resource.attributes["app_name"]) where IsString(resource.attributes["app_name"])
+      - set(resource.attributes["service.name"], resource.attributes["app"]) where IsString(resource.attributes["app"])
+      - set(resource.attributes["k8s.node.name"], resource.attributes["node"]) where IsString(resource.attributes["node"])
+      - delete_key(attributes, "syslog.message")
+      - delete_key(attributes, "syslog.sd")
+      - delete_key(attributes, "syslog_sd_params_raw")
+      - delete_key(attributes, "syslog.pri")
+      - delete_key(attributes, "syslog.severity")
+      - delete_key(attributes, "syslog.timestamp")
+      - delete_key(attributes, "syslog.procid") where attributes["syslog.procid"] == "-"
+      - delete_key(attributes, "syslog.msgid") where attributes["syslog.msgid"] == "-"
+      - delete_key(resource.attributes, "container_image")
+      - delete_key(resource.attributes, "app_name")
+      - delete_key(resource.attributes, "app")
+      - delete_key(resource.attributes, "node")
+  filter/syslog:
+    error_mode: ignore
+    logs:
+      log_record:
+      - attributes["syslog.program"] == "otelcol-contrib"
+      - attributes["syslog.program"] == "audisp-syslog"
+      - attributes["syslog.program"] == "CRON"
+      - attributes["syslog.program"] == "systemd"
 service:
   extensions: [ health_check ]
   pipelines:
     logs:
       receivers: [ otlp ]
-      processors: [ transform ]
+      processors: [ transform/syslog, filter/syslog ]
       exporters: [ debug, otlphttp ]

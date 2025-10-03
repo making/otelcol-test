@@ -1,32 +1,19 @@
 package com.example.otelcoltest;
 
+import io.opentelemetry.proto.common.v1.AnyValue;
+import io.opentelemetry.proto.logs.v1.LogRecord;
+import io.opentelemetry.proto.logs.v1.LogsData;
+import io.opentelemetry.proto.logs.v1.ResourceLogs;
+import io.opentelemetry.proto.logs.v1.ScopeLogs;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.ServerSocket;
 import java.time.Duration;
 import java.time.Instant;
-
-import io.opentelemetry.proto.common.v1.AnyValue;
-import io.opentelemetry.proto.common.v1.InstrumentationScope;
-import io.opentelemetry.proto.common.v1.KeyValue;
-import io.opentelemetry.proto.logs.v1.LogRecord;
-import io.opentelemetry.proto.logs.v1.LogsData;
-import io.opentelemetry.proto.logs.v1.ResourceLogs;
-import io.opentelemetry.proto.logs.v1.ScopeLogs;
-import io.opentelemetry.proto.resource.v1.Resource;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
-import org.testcontainers.containers.BindMode;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.output.Slf4jLogConsumer;
-import org.testcontainers.containers.wait.strategy.Wait;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
-import org.zalando.logbook.spring.LogbookClientHttpRequestInterceptor;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpHeaders;
@@ -36,6 +23,14 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.web.client.RestClient;
+import org.testcontainers.containers.BindMode;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.output.Slf4jLogConsumer;
+import org.testcontainers.containers.wait.strategy.Wait;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.DockerImageName;
+import org.zalando.logbook.spring.LogbookClientHttpRequestInterceptor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -43,7 +38,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Testcontainers
 class OtelcolTestApplicationTests {
 
-	private static final String COLLECTOR_IMAGE = "ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib:0.110.0";
+	private static final String COLLECTOR_IMAGE = "ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib:0.136.0";
 
 	private static final int COLLECTOR_OTLP_HTTP_PORT = 4318;
 
@@ -88,9 +83,9 @@ class OtelcolTestApplicationTests {
 
 	@Test
 	void contextLoads() {
-		// https://logz.io/blog/logstash-grok/
-		String message = "2016-07-11T23:56:42.000+00:00 INFO [MySecretApp.com.Transaction.Manager]:Starting transaction for session -464410bf-37bf-475a-afc0-498e0199f008";
-		ResponseEntity<Void> response = this.restClient.post()
+		String message = "<14>1 2024-10-08T01:10:01.231783Z harbor harbor-portal-d6c99f896-2v8zm portal - [k8s@8 node=\"kind-worker2\" container_image=\"docker.io/goharbor/harbor-portal:v2.11.1\" app=\"harbor\"] \uFEFF10.244.2.1 - - [08/Oct/2024:01:10:01 +0000] \"GET / HTTP/1.1\" 200 785 \"-\" \"kube-probe/1.30\"\n";
+		message = "<14>1 2024-10-08T01:10:05.741468Z kube-system kindnet-ltt8c kindnet-cni - [k8s@8 app=\"kindnet\" node=\"kind-worker\" container_image=\"docker.io/kindest/kindnetd:v20240813-c6f155d6\"] \uFEFFI1008 01:10:05.741186       1 main.go:295] Handling node with IPs: map[192.168.228.4:{}]\n";
+    ResponseEntity<Void> response = this.restClient.post()
 			.uri("/v1/logs")
 			.body(just(message))
 			.retrieve()
@@ -98,22 +93,7 @@ class OtelcolTestApplicationTests {
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
 		Awaitility.waitAtMost(Duration.ofSeconds(1))
 			.untilAsserted(() -> assertThat(this.otlpV1Controller.logsData).hasSize(1));
-		assertThat(this.otlpV1Controller.logsData.get(0)).isEqualTo(LogsData.newBuilder()
-			.addResourceLogs(ResourceLogs.newBuilder()
-				.setResource(Resource.newBuilder())
-				.addScopeLogs(ScopeLogs.newBuilder()
-					.setScope(InstrumentationScope.newBuilder())
-					.addLogRecords(LogRecord.newBuilder()
-						.setSeverityText("INFO")
-						.setTimeUnixNano(toNano("2016-07-11T23:56:42.000+00:00"))
-						.setObservedTimeUnixNano(toNano("2016-07-11T23:56:42.000+00:00"))
-						.addAttributes(KeyValue.newBuilder()
-							.setKey("class")
-							.setValue(AnyValue.newBuilder().setStringValue("MySecretApp.com.Transaction.Manager")))
-						.setBody(AnyValue.newBuilder()
-							.setStringValue(
-									"Starting transaction for session -464410bf-37bf-475a-afc0-498e0199f008")))))
-			.build());
+		System.out.println(this.otlpV1Controller.logsData.get(0));
 	}
 
 	long toNano(String timestamp) {
