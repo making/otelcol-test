@@ -53,6 +53,7 @@ processors:
       - set(time, Time(attributes["syslog.timestamp"], "%b %d %H:%M:%S")) where IsMatch(attributes["syslog.timestamp"], "^[a-zA-Z]+ .+\\d$")
       - set(body, attributes["syslog.message"])
       - set(resource.attributes["container.image.name"], attributes["container_image"]) where IsString(attributes["container_image"])
+      - set(resource.attributes["container.image.name"], attributes["container_image"]) where IsString(attributes["container_image"])
       - set(resource.attributes["service.name"], attributes["app_name"]) where IsString(attributes["app_name"])
       - set(resource.attributes["service.name"], attributes["app"]) where IsString(attributes["app"])
       - set(resource.attributes["k8s.node.name"], attributes["node"]) where IsString(attributes["node"])
